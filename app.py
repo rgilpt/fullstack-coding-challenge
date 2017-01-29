@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, jsonify, request, abort, url_for
 from flask_mongoengine import MongoEngine
 
 import requests
@@ -46,9 +46,10 @@ STATES = ('ToDo', 'Asked', 'Processed')
 
 
 class StoryTranslated(db.Document):
-    state = db.StringField(max_length=2, choices=STATES)
+    state = db.StringField(max_length=12, choices=STATES)
     title_translated = db.StringField(max_length=300)
     parent_story = db.ReferenceField(Story)
+    language_code = db.StringField(max_length=2)
     #ToDo: Add time to filter old, unresolved translations
 
 # Utilities
@@ -173,34 +174,41 @@ def ask_translation(story, language_code):
     try:
         #check if this translation is already done or asked
         translation_check = StoryTranslated.objects(parent_story=story.id)
-        if len(translation_check) > 0:
-            return
+        ask_for = False
+        if len(translation_check) == 0:
+            ask_for = True
+        elif translation_check[0].state == 'ToDo':
+            ask_for = True
+            translation_check = translation_check[0]
 
-
-        headers = {'Authorization': '711b8090e84dcb4981e6381b59757ac5c75ebb26',
+        if ask_for:
+            headers = {'Authorization': '711b8090e84dcb4981e6381b59757ac5c75ebb26',
                    'username': 'backendchallenge',
                    "Content-Type": "application/json"
                    }
-        url = 'https://sandbox.unbabel.com/tapi/v2/translation/'
-        payload = {'text': story.title, 'target_language': language_code, "text_format": 'text'}
+            url = 'https://sandbox.unbabel.com/tapi/v2/translation/'
+            payload = {'text': story.title, 'target_language': language_code, "text_format": 'text'}
 
-        r = requests.post(url, data=payload, headers=headers)
+            r = requests.post(url, data=payload, headers=headers)
 
-        if 'uid' in r:
-            #update or create translated story
-            translated = StoryTranslated(
-                state='Asked',
+            if 'uid' in r:
+                #update or create translated story
+                translation_check = StoryTranslated(
+                    state='Asked',
+                    parent_story=story.id,
+                    uid=r.uid,
+                    language_code=language_code
+                )
+                translation_check.save()
+
+            else:
+                translated = StoryTranslated(
+                state='ToDo',
                 parent_story=story.id,
-                uid=r.uid
+                language_code=language_code,
+                title_translated="##PROCESSING##"
             )
             translated.save()
-
-        # else:
-        #     translated = StoryTranslated(
-        #         state='ToDo',
-        #         parent_story=story.id
-        #     )
-        #     translated.save()
     except Exception as e:
         print e
 
@@ -237,6 +245,9 @@ def get_translations():
         for l in LANGUAGE_CODES:
             for s in stories:
                 ask_translation(s, l)
+        # for l in LANGUAGE_CODES:
+        #     for s in stories:
+        #         get_translation(s, l)
 
     except Exception as e:
         print e
@@ -252,15 +263,34 @@ def start_get_translations():
     translatorHandler.start()
 
 # Views
+
 @app.route('/')
 def get_translated_hn():
+    url_for('static', filename='app.js')
     # myStory = Story(by='rgilpt', descendants=2, hn_id=69).save()
     d = datetime.datetime(datetime.datetime.now().year, datetime.datetime.now().month, datetime.datetime.now().day)
     today_timestamp = (d - datetime.datetime(1970, 1, 1)).total_seconds()
     stories = Story.objects(time__gte=today_timestamp, type='story')
+    stories = stories.order_by('-score')[0:10]
 
     return render_template('show_news.html', stories=stories)
 
+
+@app.route('/api/v1.0/stories/', methods=['GET'])
+def get_translated_stories():
+    if not request.args or not 'language_code' in request.args:
+        abort(400)
+
+    d = datetime.datetime(datetime.datetime.now().year, datetime.datetime.now().month, datetime.datetime.now().day)
+    today_timestamp = (d - datetime.datetime(1970, 1, 1)).total_seconds()
+    stories = Story.objects(time__gte=today_timestamp, type='story')
+    stories = stories.order_by('-score')[0:10]
+
+    final_stories = []
+    for s in stories:
+        final_stories.append(StoryTranslated.objects(parent_story=s, language_code=request.args['language_code'])[0])
+
+    return jsonify({'stories_translated': final_stories})
 
 if __name__ == "__main__":
     atexit.register(interrupt)
