@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
-
-    <head>
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard</title>
     <script
       src="https://code.jquery.com/jquery-3.1.1.min.js"
       integrity="sha256-hVVnYaiADRTO2PzUGmuLJr8BLUSjGIZsDYGmIJLv2b8="
@@ -15,40 +16,39 @@
 
     <!-- Latest compiled and minified JavaScript -->
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
-    <script src="static/app.js"></script>
-    <title>HK News Translated</title>
 </head>
-
-    <body>
-    <div class="row">
-        <div class="col-md-1"></div>
-        <div class="col-md-10">
-            <h1>HK News Translated</h1>
-            <br>
-            <div>
-                <span><a id="original">Original</a></span>|
-                <span><a id="pt">PT</a></span>|
-                <span><a id="nl">NL</a></span>
-            </div>
-            <br>
-            <a href="/dashboard">Dashboard</a>
+<body>
+<div class="row">
+    <div class="col-md-1"></div>
+    <div class="col-md-10">
+        <h1>Dashboard</h1>
+        <br>
+        <div>
+            <a href="/">Back to News</a>
         </div>
-        <div class="col-md-1"></div>
     </div>
-    <br>
+</div>
+<div class="row">
     <div class="row">
         <div class="col-md-2"></div>
         <div class="col-md-8">
-            <ul id="list-news" class="list-unstyled">
-                {% for story in stories %}
-                    <li><a href="{{story.url}}">{{story.title}}</a> </li>
+            <table class="table">
+                <tr>
+                    <th>Title</th>
+                    <th>PT</th>
+                    <th>NL</th>
+                </tr>
+                {% for d in dashboard_info %}
+                    <tr>
+                        <th>{{d.original}}</th>
+                        <th>{{d.pt}}</th>
+                        <th>{{d.nl}}</th>
+                    </tr>
                 {% endfor %}
-            </ul>
+            </table>
         </div>
         <div class="col-md-2"></div>
-
     </div>
-
+</div>
 </body>
-
 </html>

@@ -17,6 +17,10 @@ KIDS_POOLING = 60*5
 
 translatorHandler = threading.Thread()
 TRANSLATOR_POOLING = 60*8
+
+storiesHandler = threading.Thread()
+STORIES_POOLING = 60*10
+
 LANGUAGE_CODES = ['pt', 'nl']
 
 # db Stuff
@@ -47,7 +51,7 @@ STATES = ('ToDo', 'Asked', 'Processed')
 
 class StoryTranslated(db.Document):
     state = db.StringField(max_length=12, choices=STATES)
-    title_translated = db.StringField(max_length=300)
+    title = db.StringField(max_length=300)
     parent_story = db.ReferenceField(Story)
     language_code = db.StringField(max_length=2)
     #ToDo: Add time to filter old, unresolved translations
@@ -115,6 +119,9 @@ def get_topmost_stories():
     except Exception as e:
         print e
 
+    print "topmost stories handler finished"
+    storiesHandler = threading.Timer(TRANSLATOR_POOLING, get_topmost_stories, ())
+    storiesHandler.start()
 
 def interrupt():
     global kidsHandler
@@ -160,6 +167,7 @@ def get_kids_from_hn():
         for k in kids:
             get_kid_from_hn(k)
 
+    print "comments handler finished"
     kidsHandler = threading.Timer(KIDS_POOLING, get_kids_from_hn, ())
     kidsHandler.start()
 
@@ -206,7 +214,7 @@ def ask_translation(story, language_code):
                 state='ToDo',
                 parent_story=story.id,
                 language_code=language_code,
-                title_translated="##PROCESSING##"
+                title="##PROCESSING##"
             )
             translated.save()
     except Exception as e:
@@ -245,13 +253,14 @@ def get_translations():
         for l in LANGUAGE_CODES:
             for s in stories:
                 ask_translation(s, l)
-        # for l in LANGUAGE_CODES:
-        #     for s in stories:
-        #         get_translation(s, l)
+        todo_translated_stories = StoryTranslated.objects(state='ToDo')
+        for ts in todo_translated_stories:
+            get_translation(ts)
 
     except Exception as e:
         print e
 
+    print "translations handler finished"
     translatorHandler = threading.Timer(TRANSLATOR_POOLING, get_translations, ())
     translatorHandler.start()
 
@@ -262,8 +271,15 @@ def start_get_translations():
     translatorHandler = threading.Timer(TRANSLATOR_POOLING, get_translations, ())
     translatorHandler.start()
 
-# Views
 
+def start_get_topstories():
+
+    global storiesHandler
+    storiesHandler = threading.Timer(TRANSLATOR_POOLING, get_topmost_stories, ())
+    storiesHandler.start()
+
+
+# Views
 @app.route('/')
 def get_translated_hn():
     url_for('static', filename='app.js')
@@ -276,7 +292,26 @@ def get_translated_hn():
     return render_template('show_news.html', stories=stories)
 
 
-@app.route('/api/v1.0/stories/', methods=['GET'])
+@app.route('/dashboard')
+def get_dashboard():
+    url_for('static', filename='app.js')
+    # myStory = Story(by='rgilpt', descendants=2, hn_id=69).save()
+    d = datetime.datetime(datetime.datetime.now().year, datetime.datetime.now().month, datetime.datetime.now().day)
+    today_timestamp = (d - datetime.datetime(1970, 1, 1)).total_seconds()
+    stories = Story.objects(time__gte=today_timestamp, type='story')
+    dashboard_info = []
+    for s in stories:
+        dashboard_line = {'original': s.title}
+        for lc in LANGUAGE_CODES:
+            story_translated = StoryTranslated.objects(parent_story=s, language_code=lc)
+            if len(story_translated) > 0:
+                dashboard_line[lc] = story_translated[0].state
+        dashboard_info.append(dashboard_line)
+
+    return render_template('dashboard.html', dashboard_info=dashboard_info)
+
+
+@app.route('/api/v1.0/translated_stories/', methods=['GET'])
 def get_translated_stories():
     if not request.args or not 'language_code' in request.args:
         abort(400)
@@ -288,14 +323,27 @@ def get_translated_stories():
 
     final_stories = []
     for s in stories:
-        final_stories.append(StoryTranslated.objects(parent_story=s, language_code=request.args['language_code'])[0])
+        story_translated = StoryTranslated.objects(parent_story=s, language_code=request.args['language_code'])
+        if len(story_translated) > 0:
+            final_stories.append(story_translated[0])
 
-    return jsonify({'stories_translated': final_stories})
+    return jsonify({'stories': final_stories})
+
+@app.route('/api/v1.0/stories/', methods=['GET'])
+def get_stories():
+    d = datetime.datetime(datetime.datetime.now().year, datetime.datetime.now().month, datetime.datetime.now().day)
+    today_timestamp = (d - datetime.datetime(1970, 1, 1)).total_seconds()
+    stories = Story.objects(time__gte=today_timestamp, type='story')
+    stories = stories.order_by('-score')[0:10]
+
+    return jsonify({'stories': stories})
+
 
 if __name__ == "__main__":
     atexit.register(interrupt)
 
-    get_topmost_stories()
+    # get_topmost_stories()
+    start_get_topstories()
     start_get_kids()
     start_get_translations()
     app.run()
