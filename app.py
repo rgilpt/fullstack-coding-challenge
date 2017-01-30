@@ -2,6 +2,9 @@ from flask import Flask, jsonify, request, abort, url_for
 from flask_mongoengine import MongoEngine
 
 import requests
+from requests.auth import HTTPBasicAuth
+from requests_oauthlib import OAuth1
+
 import threading
 import atexit
 import datetime
@@ -190,14 +193,18 @@ def ask_translation(story, language_code):
             translation_check = translation_check[0]
 
         if ask_for:
-            headers = {'Authorization': '711b8090e84dcb4981e6381b59757ac5c75ebb26',
-                   'username': 'backendchallenge',
-                   "Content-Type": "application/json"
-                   }
+
+            # headers = {'Authorization': 'ApiKey', 'backendchallenge': '711b8090e84dcb4981e6381b59757ac5c75ebb26'}# {"Content-Type": "application/json"}
+            headers = {'Authorization': 'ApiKey backendchallenge:711b8090e84dcb4981e6381b59757ac5c75ebb26', "Content-Type": "application/json"}
+
             url = 'https://sandbox.unbabel.com/tapi/v2/translation/'
             payload = {'text': story.title, 'target_language': language_code, "text_format": 'text'}
 
             r = requests.post(url, data=payload, headers=headers)
+
+
+            # r = requests.post(url, data=payload, headers=headers,
+            #                   auth=('backendchallenge', '711b8090e84dcb4981e6381b59757ac5c75ebb26'))
 
             if 'uid' in r:
                 #update or create translated story
@@ -224,8 +231,8 @@ def ask_translation(story, language_code):
 def get_translation(story_translated):
     try:
         if story_translated.state == 'Asked':
-            headers = {'Authorization': '711b8090e84dcb4981e6381b59757ac5c75ebb26',
-                       'username': 'backendchallenge',
+            headers = {'Authorization': 'ApiKey',
+                       'backendchallenge': '711b8090e84dcb4981e6381b59757ac5c75ebb26',
                        "Content-Type": "application/json"
                        }
             url = 'https://sandbox.unbabel.com/tapi/v2/translation/' + story_translated.uid
@@ -268,14 +275,14 @@ def get_translations():
 def start_get_translations():
 
     global translatorHandler
-    translatorHandler = threading.Timer(TRANSLATOR_POOLING, get_translations, ())
+    translatorHandler = threading.Timer(1, get_translations, ())
     translatorHandler.start()
 
 
 def start_get_topstories():
 
     global storiesHandler
-    storiesHandler = threading.Timer(TRANSLATOR_POOLING, get_topmost_stories, ())
+    storiesHandler = threading.Timer(1, get_topmost_stories, ())
     storiesHandler.start()
 
 
