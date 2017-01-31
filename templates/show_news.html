@@ -41,7 +41,7 @@
         <div class="col-md-8">
             <ul id="list-news" class="list-unstyled">
                 {% for story in stories %}
-                    <li><a href="{{story.url}}">{{story.title}}</a> </li>
+                    <li><a href="{{story.url}}">{{story.title}}</a><a class="comment" data-index="{{story.id}}"> (Comments)</a> </li>
                 {% endfor %}
             </ul>
         </div>

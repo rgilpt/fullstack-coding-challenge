@@ -1,13 +1,19 @@
+import urllib
+
 from flask import Flask, jsonify, request, abort, url_for
 from flask_mongoengine import MongoEngine
 
 import requests
+import urllib2
+
 from requests.auth import HTTPBasicAuth
 from requests_oauthlib import OAuth1
 
 import threading
 import atexit
 import datetime
+
+import json
 
 # create the application object
 from flask import render_template
@@ -195,18 +201,32 @@ def ask_translation(story, language_code):
         if ask_for:
 
             # headers = {'Authorization': 'ApiKey', 'backendchallenge': '711b8090e84dcb4981e6381b59757ac5c75ebb26'}# {"Content-Type": "application/json"}
-            headers = {'Authorization': 'ApiKey backendchallenge:711b8090e84dcb4981e6381b59757ac5c75ebb26', "Content-Type": "application/json"}
+            # headers = {"Content-Type": "application/json"}
+            # auth = {'Authorization': "ApiKey backendchallenge:711b8090e84dcb4981e6381b59757ac5c75ebb26"}
 
-            url = 'https://sandbox.unbabel.com/tapi/v2/translation/'
+            headers = {}
+            # headers['Authorization'] = "ApiKey backendchallenge:711b8090e84dcb4981e6381b59757ac5c75ebb26"
+            # headers['Content-Type'] = "application/json"
+            headers = {'Authorization': "ApiKey backendchallenge:711b8090e84dcb4981e6381b59757ac5c75ebb26",
+                       "Content-Type": "application/json"}
+            url = 'https://sandbox.unbabel.com/tapi/v2/translation'
             payload = {'text': story.title, 'target_language': language_code, "text_format": 'text'}
 
+            # data = urllib.urlencode(payload)
+            # headers = urllib.urlencode(headers)
+            # req = urllib2.Request('POST', url, data, headers)
+            # response = urllib2.urlopen(req)
+            # the_page = response.read()
+
+            # params = {'username': 'backendchallenge', 'api_key': '711b8090e84dcb4981e6381b59757ac5c75ebb26'}
             r = requests.post(url, data=payload, headers=headers)
+            # r = requests.post(url, data=payload, auth=auth, headers=headers)
 
 
             # r = requests.post(url, data=payload, headers=headers,
             #                   auth=('backendchallenge', '711b8090e84dcb4981e6381b59757ac5c75ebb26'))
-
-            if 'uid' in r:
+            result = json.loads(r.text)
+            if 'uid' in result:
                 #update or create translated story
                 translation_check = StoryTranslated(
                     state='Asked',
@@ -286,6 +306,23 @@ def start_get_topstories():
     storiesHandler.start()
 
 
+def comments_controller(kid):
+    comment = {}
+    kid_story = Story.objects(hn_id=kid)
+    if len(kid_story) > 0:
+        kid = kid_story[0]
+    else:
+        return comment
+    if 'text' in kid:
+        comment['text'] = kid.text
+    comment['kids'] = []
+    # comment['kids'] = kid.kids
+    if 'kids' in kid:
+        for k in kid.kids:
+            comment['kids'].append(comments_controller(k))
+
+    return comment
+
 # Views
 @app.route('/')
 def get_translated_hn():
@@ -344,6 +381,19 @@ def get_stories():
     stories = stories.order_by('-score')[0:10]
 
     return jsonify({'stories': stories})
+
+
+@app.route('/api/v1.0/comments/', methods=['GET'])
+def comments_list():
+    comments = []
+    if request.args:
+        if 'filter_story' in request.args:
+            story = Story.objects(id=request.args['filter_story'])[0]
+            if 'kids' in story:
+                for k in story.kids:
+                    comments.append(comments_controller(k))
+
+    return jsonify({'comments': comments})
 
 
 if __name__ == "__main__":
