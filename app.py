@@ -63,6 +63,7 @@ class StoryTranslated(db.Document):
     title = db.StringField(max_length=300)
     parent_story = db.ReferenceField(Story)
     language_code = db.StringField(max_length=2)
+    uid = db.StringField(max_length=20)
     #ToDo: Add time to filter old, unresolved translations
 
 # Utilities
